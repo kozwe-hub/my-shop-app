@@ -19,6 +19,323 @@ jobs:
           flutter-version: '3.24.0'
           channel: 'stable'
       - run: flutter create --org com.kozwe.chillmal --project-name chill_mal temp_app && shopt -s dotglob nullglob && mv temp_app/* . && rmdir temp_app
+      - run: |
+          cat << 'EOF' > lib/main.dart
+          import 'package:flutter/material.dart';
+
+          void main() {
+            runApp(const ChillMalApp());
+          }
+
+          class ChillMalApp extends StatelessWidget {
+            const ChillMalApp({super.key});
+
+            @override
+            Widget build(BuildContext context) {
+              return MaterialApp(
+                title: 'Chill Mal',
+                debugShowCheckedModeBanner: false,
+                theme: ThemeData(
+                  colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepOrange),
+                  useMaterial3: true,
+                ),
+                home: const ShopHomePage(),
+              );
+            }
+          }
+
+          class Product {
+            final String id;
+            final String name;
+            final String category;
+            final double price;
+            final IconData icon;
+
+            const Product({
+              required this.id,
+              required this.name,
+              required this.category,
+              required this.price,
+              required this.icon,
+            });
+          }
+
+          class ShopHomePage extends StatefulWidget {
+            const ShopHomePage({super.key});
+
+            @override
+            State<ShopHomePage> createState() => _ShopHomePageState();
+          }
+
+          class _ShopHomePageState extends State<ShopHomePage> {
+            final List<Product> _products = const [
+              Product(id: 'p1', name: 'Wireless Earbuds', category: 'Electronics', price: 24.99, icon: Icons.headphones),
+              Product(id: 'p2', name: 'Smart Watch Pro', category: 'Electronics', price: 49.99, icon: Icons.watch),
+              Product(id: 'p3', name: 'Chill Hoodie', category: 'Fashion', price: 29.50, icon: Icons.checkroom),
+              Product(id: 'p4', name: 'Running Sneakers', category: 'Fashion', price: 54.00, icon: Icons.directions_walk),
+              Product(id: 'p5', name: 'Cold Brew Pack', category: 'Food', price: 12.75, icon: Icons.local_cafe),
+              Product(id: 'p6', name: 'Snack Box Combo', category: 'Food', price: 15.00, icon: Icons.fastfood),
+            ];
+
+            final List<String> _categories = const ['All', 'Electronics', 'Fashion', 'Food'];
+            final Map<String, int> _cart = {};
+            String _selectedCategory = 'All';
+            String _searchQuery = '';
+
+            List<Product> get _filteredProducts {
+              return _products.where((item) {
+                final matchesCategory = _selectedCategory == 'All' || item.category == _selectedCategory;
+                final matchesSearch = item.name.toLowerCase().contains(_searchQuery.trim().toLowerCase());
+                return matchesCategory && matchesSearch;
+              }).toList();
+            }
+
+            int get _totalCartItems => _cart.values.fold(0, (sum, qty) => sum + qty);
+
+            double get _totalCartPrice {
+              double total = 0;
+              _cart.forEach((productId, qty) {
+                final product = _products.firstWhere((p) => p.id == productId);
+                total += product.price * qty;
+              });
+              return total;
+            }
+
+            void _addToCart(Product product) {
+              setState(() {
+                _cart[product.id] = (_cart[product.id] ?? 0) + 1;
+              });
+              ScaffoldMessenger.of(context).clearSnackBars();
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Added "${product.name}" to cart'),
+                  duration: const Duration(seconds: 1),
+                ),
+              );
+            }
+
+            void _changeQty(String productId, int delta) {
+              setState(() {
+                final nextQty = (_cart[productId] ?? 0) + delta;
+                if (nextQty <= 0) {
+                  _cart.remove(productId);
+                } else {
+                  _cart[productId] = nextQty;
+                }
+              });
+            }
+
+            void _openCartSheet() {
+              showModalBottomSheet(
+                context: context,
+                isScrollControlled: true,
+                builder: (ctx) {
+                  return StatefulBuilder(
+                    builder: (context, setModalState) {
+                      void updateCart(String id, int delta) {
+                        _changeQty(id, delta);
+                        setModalState(() {});
+                      }
+
+                      final entries = _cart.entries.toList();
+                      return Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                const Text('Chill Mal Cart', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                                Text('Items: $_totalCartItems', style: const TextStyle(fontWeight: FontWeight.w600)),
+                              ],
+                            ),
+                            const Divider(height: 24),
+                            if (entries.isEmpty)
+                              const Padding(
+                                padding: EdgeInsets.symmetric(vertical: 28),
+                                child: Center(child: Text('Your cart is empty.')),
+                              )
+                            else
+                              ConstrainedBox(
+                                constraints: const BoxConstraints(maxHeight: 280),
+                                child: ListView.builder(
+                                  shrinkWrap: true,
+                                  itemCount: entries.length,
+                                  itemBuilder: (context, index) {
+                                    final id = entries[index].key;
+                                    final qty = entries[index].value;
+                                    final product = _products.firstWhere((p) => p.id == id);
+                                    return ListTile(
+                                      contentPadding: EdgeInsets.zero,
+                                      leading: Icon(product.icon),
+                                      title: Text(product.name),
+                                      subtitle: Text('\$${(product.price * qty).toStringAsFixed(2)}'),
+                                      trailing: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          IconButton(
+                                            icon: const Icon(Icons.remove_circle_outline),
+                                            onPressed: () => updateCart(id, -1),
+                                          ),
+                                          Text('$qty'),
+                                          IconButton(
+                                            icon: const Icon(Icons.add_circle_outline),
+                                            onPressed: () => updateCart(id, 1),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ),
+                            const Divider(height: 24),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                const Text('Total', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                                Text(
+                                  '\$${_totalCartPrice.toStringAsFixed(2)}',
+                                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.deepOrange),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 14),
+                            SizedBox(
+                              width: double.infinity,
+                              child: FilledButton(
+                                onPressed: entries.isEmpty
+                                    ? null
+                                    : () {
+                                        setState(() => _cart.clear());
+                                        Navigator.pop(context);
+                                        ScaffoldMessenger.of(this.context).showSnackBar(
+                                          const SnackBar(content: Text('Order placed on Chill Mal!')),
+                                        );
+                                      },
+                                child: const Text('Checkout Now'),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  );
+                },
+              );
+            }
+
+            @override
+            Widget build(BuildContext context) {
+              final items = _filteredProducts;
+
+              return Scaffold(
+                appBar: AppBar(
+                  title: const Text('Chill Mal'),
+                  actions: [
+                    IconButton(
+                      onPressed: _openCartSheet,
+                      icon: Badge(
+                        isLabelVisible: _totalCartItems > 0,
+                        label: Text('$_totalCartItems'),
+                        child: const Icon(Icons.shopping_cart),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                  ],
+                ),
+                body: Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+                      child: TextField(
+                        onChanged: (value) => setState(() => _searchQuery = value),
+                        decoration: InputDecoration(
+                          hintText: 'Search products...',
+                          prefixIcon: const Icon(Icons.search),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                          isDense: true,
+                        ),
+                      ),
+                    ),
+                    SizedBox(
+                      height: 48,
+                      child: ListView.separated(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        scrollDirection: Axis.horizontal,
+                        itemCount: _categories.length,
+                        separatorBuilder: (_, __) => const SizedBox(width: 8),
+                        itemBuilder: (context, index) {
+                          final category = _categories[index];
+                          final selected = _selectedCategory == category;
+                          return ChoiceChip(
+                            label: Text(category),
+                            selected: selected,
+                            onSelected: (_) => setState(() => _selectedCategory = category),
+                          );
+                        },
+                      ),
+                    ),
+                    Expanded(
+                      child: items.isEmpty
+                          ? const Center(child: Text('No matching products found.'))
+                          : GridView.builder(
+                              padding: const EdgeInsets.all(12),
+                              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                                crossAxisCount: 2,
+                                mainAxisSpacing: 12,
+                                crossAxisSpacing: 12,
+                                childAspectRatio: 0.82,
+                              ),
+                              itemCount: items.length,
+                              itemBuilder: (context, index) {
+                                final product = items[index];
+                                return Card(
+                                  elevation: 1.5,
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(10),
+                                    child: Column(
+                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Column(
+                                          children: [
+                                            Icon(product.icon, size: 40, color: Colors.deepOrange),
+                                            const SizedBox(height: 8),
+                                            Text(
+                                              product.name,
+                                              textAlign: TextAlign.center,
+                                              maxLines: 2,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: const TextStyle(fontWeight: FontWeight.bold),
+                                            ),
+                                            const SizedBox(height: 4),
+                                            Text(
+                                              '\$${product.price.toStringAsFixed(2)}',
+                                              style: const TextStyle(color: Colors.deepOrange, fontWeight: FontWeight.w600),
+                                            ),
+                                          ],
+                                        ),
+                                        SizedBox(
+                                          width: double.infinity,
+                                          child: FilledButton.tonal(
+                                            onPressed: () => _addToCart(product),
+                                            child: const Text('Add to Cart'),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                    ),
+                  ],
+                ),
+              );
+            }
+          }
+          EOF
       - run: sed -i 's/android:label="[^"]*"/android:label="Chill Mal"/g' android/app/src/main/AndroidManifest.xml
       - run: sed -i 's/gradle-.*-all\.zip/gradle-8.7-all.zip/g' android/gradle/wrapper/gradle-wrapper.properties
       - run: flutter build apk --release

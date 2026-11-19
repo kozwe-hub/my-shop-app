@@ -35,7 +35,7 @@ jobs:
           import 'package:http/http.dart' as http;
 
           const String kOrderApiUrl =
-              'https://script.google.com/macros/s/AKfycbz8W3tGTts9RuSjKeRP2n57XtBu0OIpT2KU-ibKP8iaenus8VyJkcLLsAi46vGQwN-4AQ/exec';
+              'https://script.google.com/macros/s/AKfycby-shrO8cyl-dcvwDR2FzfwcX0ExlPlb1YIo6NDrXSnzhWwjy2-2J-5FMpGzJNv2RhxzA/exec';
 
           void main() {
             runApp(const ChillMalApp());
@@ -131,8 +131,13 @@ jobs:
                 final res = await http.get(uri);
                 if (res.statusCode >= 200 && res.statusCode < 300) {
                   final decoded = jsonDecode(res.body);
-                  if (decoded is Map<String, dynamic> && decoded['ok'] == true && decoded['products'] is List) {
-                    final list = (decoded['products'] as List)
+                  final rawList = decoded is List
+                      ? decoded
+                      : (decoded is Map && decoded['products'] is List
+                          ? decoded['products'] as List
+                          : null);
+                  if (rawList != null) {
+                    final list = rawList
                         .asMap()
                         .entries
                         .map((e) => Product.fromJson(Map<String, dynamic>.from(e.value as Map), e.key + 1))
